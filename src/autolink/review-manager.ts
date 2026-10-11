@@ -36,7 +36,12 @@ export class ReviewManager {
     notes: Map<string, NoteRecord>,
     readFile: (path: string) => Promise<string>
   ): Promise<LinkProposal[]> {
-    this.titleIndex.buildIndex(notes, this.settings.matchAliases);
+    this.titleIndex.buildIndex(
+      notes,
+      this.settings.matchAliases,
+      this.settings.linkHeadings ?? true,
+      this.settings.linkOnlyTitleHeading === true
+    );
 
     const allProposals: LinkProposal[] = [];
 

@@ -1,7 +1,7 @@
 {
   "name": "obsidian-semantic-autolinker",
   "version": "1.0.0",
-  "description": "Local-first Obsidian plugin for semantic auto-linking, knowledge graphs, and relationship discovery without external AI or cloud APIs.",
+  "description": "Local-first Obsidian plugin for semantic auto-linking based on titles, headings, and common keywords without external AI or cloud APIs.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -15,15 +15,13 @@
     "obsidian",
     "obsidian-plugin",
     "autolink",
-    "knowledge-graph",
-    "semantic-search",
-    "tf-idf",
-    "cytoscape"
+    "wikilinks",
+    "headings",
+    "common-keywords"
   ],
   "author": "Vedha",
   "license": "MIT",
   "devDependencies": {
-    "@types/cytoscape": "^3.21.9",
     "@types/node": "^22.13.1",
     "esbuild": "^0.25.0",
     "fake-indexeddb": "^6.0.0",
@@ -31,8 +29,5 @@
     "tslib": "^2.8.1",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
-  },
-  "dependencies": {
-    "cytoscape": "^3.30.4"
   }
 }

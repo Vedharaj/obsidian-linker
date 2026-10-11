@@ -1,9 +1,18 @@
+export class MetadataCache {
+  public cache = new Map<string, any>();
+  public getFileCache(file: any): any {
+    return this.cache.get(file.path) || {};
+  }
+}
+
 export class App {
-  public vault: any;
-  public workspace: any;
+  public vault: Vault;
+  public workspace: Workspace;
+  public metadataCache: MetadataCache;
   constructor() {
     this.vault = new Vault();
     this.workspace = new Workspace();
+    this.metadataCache = new MetadataCache();
   }
 }
 
@@ -27,6 +36,10 @@ export class Vault {
 }
 
 export class Workspace {
+  public activeFile: any = null;
+  public getActiveFile(): any {
+    return this.activeFile;
+  }
   public getLeavesOfType(type: string): WorkspaceLeaf[] {
     return [];
   }
@@ -42,13 +55,46 @@ export class WorkspaceLeaf {
   public async setViewState(state: any): Promise<void> {}
 }
 
+export function createMockElement(tag = "div"): any {
+  const el: any = {
+    tagName: tag.toUpperCase(),
+    className: "",
+    id: "",
+    style: {},
+    children: [] as any[],
+    empty() {
+      this.children = [];
+    },
+    createEl(t: string, opts?: any) {
+      const child = createMockElement(t);
+      if (opts?.text) child.textContent = opts.text;
+      if (opts?.cls) child.className = opts.cls;
+      this.children.push(child);
+      return child;
+    },
+    createDiv(opts?: any) {
+      return this.createEl("div", opts);
+    },
+    createSpan(opts?: any) {
+      return this.createEl("span", opts);
+    },
+    addClass(cls: string) {
+      this.className = this.className ? `${this.className} ${cls}` : cls;
+    },
+    addEventListener(event: string, cb: (...args: any[]) => any) {
+      this[`on_${event}`] = cb;
+    },
+  };
+  return el;
+}
+
 export class ItemView {
   public leaf: WorkspaceLeaf;
   public contentEl: HTMLElement;
   public app: App;
   constructor(leaf: WorkspaceLeaf) {
     this.leaf = leaf;
-    this.contentEl = typeof document !== "undefined" ? document.createElement("div") : ({} as any);
+    this.contentEl = createMockElement("div");
     this.app = new App();
   }
   public getViewType(): string {
@@ -93,7 +139,7 @@ export class PluginSettingTab {
   constructor(app: App, plugin: any) {
     this.app = app;
     this.plugin = plugin;
-    this.containerEl = typeof document !== "undefined" ? document.createElement("div") : ({} as any);
+    this.containerEl = createMockElement("div");
   }
   public display(): void {}
 }
@@ -101,7 +147,7 @@ export class PluginSettingTab {
 export class Setting {
   public settingEl: HTMLElement;
   constructor(containerEl: HTMLElement) {
-    this.settingEl = typeof document !== "undefined" ? document.createElement("div") : ({} as any);
+    this.settingEl = createMockElement("div");
   }
   public setName(name: string): this {
     return this;
@@ -140,4 +186,17 @@ export class TFile extends TAbstractFile {
   public basename = "";
   public extension = "md";
   public stat = { size: 0, mtime: 0, ctime: 0 };
+  public content = "";
+
+  constructor(path = "", content = "") {
+    super();
+    this.path = path;
+    const parts = path.split("/");
+    const filename = parts[parts.length - 1] || "";
+    this.name = filename;
+    this.basename = filename.replace(/\.md$/, "");
+    this.extension = filename.endsWith(".md") ? "md" : "";
+    this.content = content;
+    this.stat.size = content.length;
+  }
 }

@@ -22,6 +22,22 @@ export class TitleIndex {
     return this.sortedPhrases.length;
   }
 
+  public get titleCount(): number {
+    return this.titleMap.size;
+  }
+
+  public get aliasCount(): number {
+    return this.aliasMap.size;
+  }
+
+  public get headingCount(): number {
+    return this.headingMap.size;
+  }
+
+  public get keywordCount(): number {
+    return this.keywordMap.size;
+  }
+
   public buildIndex(
     notes: Map<string, NoteRecord>,
     matchAliases = true,

@@ -10,7 +10,6 @@ import { IndexManager } from "./indexing/index-manager";
 import { JobManager } from "./jobs/job-manager";
 import { ReviewManager } from "./autolink/review-manager";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard-view";
-import { GraphView, GRAPH_VIEW_TYPE } from "./graph/graph-view";
 import { ReviewView, REVIEW_VIEW_TYPE } from "./ui/review-view";
 import { SemanticAutolinkerSettingTab } from "./ui/settings-tab";
 
@@ -69,11 +68,6 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     );
 
     this.registerView(
-      GRAPH_VIEW_TYPE,
-      (leaf: WorkspaceLeaf) => new GraphView(leaf)
-    );
-
-    this.registerView(
       REVIEW_VIEW_TYPE,
       (leaf: WorkspaceLeaf) => new ReviewView(leaf, this.reviewManager, this.indexManager)
     );
@@ -81,10 +75,6 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     // Register Ribbon Icons
     this.addRibbonIcon("layout-dashboard", "Semantic Auto-Linker Dashboard", () => {
       this.activateView(DASHBOARD_VIEW_TYPE);
-    });
-
-    this.addRibbonIcon("git-fork", "Semantic Knowledge Graph", () => {
-      this.activateView(GRAPH_VIEW_TYPE);
     });
 
     this.addRibbonIcon("link", "Auto-Link Current Note (Instant)", async () => {
@@ -175,12 +165,6 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       id: "open-dashboard",
       name: "Open Semantic Auto-Linker Dashboard",
       callback: () => this.activateView(DASHBOARD_VIEW_TYPE),
-    });
-
-    this.addCommand({
-      id: "open-graph",
-      name: "Open Semantic Knowledge Graph",
-      callback: () => this.activateView(GRAPH_VIEW_TYPE),
     });
 
     this.addCommand({
@@ -476,15 +460,6 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       const rightSplit = (workspace as any).rightSplit;
       if (rightSplit && rightSplit.collapsed) {
         rightSplit.expand();
-      }
-
-      // If opening graph view, pass active graph data
-      if (viewType === GRAPH_VIEW_TYPE) {
-        const view = leaf.view as GraphView;
-        const graphData = this.jobManager.getGraphData();
-        if (graphData && view.setGraphData) {
-          view.setGraphData(graphData);
-        }
       }
     }
   }

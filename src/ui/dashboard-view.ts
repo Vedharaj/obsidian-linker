@@ -1,7 +1,6 @@
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import type SemanticAutolinkerPlugin from "../main";
 import { ProgressState } from "../jobs/progress-manager";
-import { GRAPH_VIEW_TYPE } from "../graph/graph-view";
 import { REVIEW_VIEW_TYPE } from "./review-view";
 
 export const DASHBOARD_VIEW_TYPE = "semantic-autolinker-dashboard-view";
@@ -61,7 +60,7 @@ export class DashboardView extends ItemView {
 
     // Header
     const header = container.createDiv({ cls: "semantic-autolinker-header" });
-    header.createEl("h2", { text: "Semantic Auto-Linker & Knowledge Graph" });
+    header.createEl("h2", { text: "Semantic Auto-Linker" });
 
     // Active Note banner
     const activeFile = this.app.workspace.getActiveFile();
@@ -126,18 +125,21 @@ export class DashboardView extends ItemView {
       await this.render();
     });
 
-    // Metrics Grid
+    // Metrics Grid: Base Obsidian Architecture
     const metricsGrid = container.createDiv({ cls: "semantic-metrics-grid" });
 
     const notesCount = this.plugin.indexManager.notes.size;
-    const relsCount = this.plugin.indexManager.relationships.size;
+    const titleIndex = this.plugin.reviewManager.getTitleIndex();
+    const titlesAliasesCount = titleIndex.titleCount + titleIndex.aliasCount;
+    const headingsCount = titleIndex.headingCount;
+    const keywordsCount = titleIndex.keywordCount;
     const proposals = await this.plugin.reviewManager.getProposals();
     const pendingCount = proposals.filter((p) => p.status === "pending").length;
-    const targetPhrasesCount = this.plugin.reviewManager.getTitleIndex().phraseCount;
 
-    this.createMetricCard(metricsGrid, "Available Targets", String(targetPhrasesCount), "phrases-metric");
     this.createMetricCard(metricsGrid, "Indexed Notes", String(notesCount), "notes-metric");
-    this.createMetricCard(metricsGrid, "Relationships", String(relsCount), "rels-metric");
+    this.createMetricCard(metricsGrid, "Titles & Aliases", String(titlesAliasesCount), "titles-metric");
+    this.createMetricCard(metricsGrid, "Headings", String(headingsCount), "headings-metric");
+    this.createMetricCard(metricsGrid, "Common Linkers", String(keywordsCount), "keywords-metric");
     this.createMetricCard(metricsGrid, "Pending Links", String(pendingCount), "proposals-metric");
 
     // Current Job & Progress Card
@@ -226,14 +228,6 @@ export class DashboardView extends ItemView {
         this.plugin.settings.autolink.linkOnlyTitleHeading = prev;
       }
       await this.render();
-    });
-
-    const openGraphBtn = secondaryBar.createEl("button", {
-      cls: "semantic-button-secondary",
-      text: "Open Knowledge Graph",
-    });
-    openGraphBtn.addEventListener("click", async () => {
-      await this.plugin.activateView(GRAPH_VIEW_TYPE);
     });
 
     const reviewBtn = secondaryBar.createEl("button", {

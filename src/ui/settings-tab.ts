@@ -13,7 +13,7 @@ export class SemanticAutolinkerSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Semantic Auto-Linker & Knowledge Graph Settings" });
+    containerEl.createEl("h2", { text: "Semantic Auto-Linker Settings" });
 
     // 1. Scanning
     containerEl.createEl("h3", { text: "Vault Scanning & Filtering" });
@@ -183,6 +183,18 @@ export class SemanticAutolinkerSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Link Dates as Standalone Notes")
+      .setDesc("When enabled, dates in any format (YYYY-MM-DD, DD-MM-YYYY, Month D, YYYY) are linked as separate [[date]] notes, detached from keywords")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autolink.linkDates ?? true)
+          .onChange(async (val) => {
+            this.plugin.settings.autolink.linkDates = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Minimum Keyword Length")
       .setDesc("Minimum length of words to consider as distinctive keywords")
       .addSlider((slider) =>
@@ -192,39 +204,6 @@ export class SemanticAutolinkerSettingTab extends PluginSettingTab {
           .setDynamicTooltip()
           .onChange(async (val) => {
             this.plugin.settings.autolink.minKeywordLength = val;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    // 4. Graph
-    containerEl.createEl("h3", { text: "Interactive Knowledge Graph" });
-
-    new Setting(containerEl)
-      .setName("Default Graph Mode")
-      .setDesc("Default edge display mode when opening graph")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("combined", "Combined Network")
-          .addOption("actual", "Actual Links Only")
-          .addOption("similarity", "TF-IDF Similarity")
-          .addOption("keyword", "Keyword Network")
-          .setValue(this.plugin.settings.graph.defaultMode)
-          .onChange(async (val: any) => {
-            this.plugin.settings.graph.defaultMode = val;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Max Visible Edges")
-      .setDesc("Limit rendering to top weighted edges to preserve UI performance")
-      .addSlider((slider) =>
-        slider
-          .setLimits(100, 1000, 50)
-          .setValue(this.plugin.settings.graph.maxVisibleEdges)
-          .setDynamicTooltip()
-          .onChange(async (val) => {
-            this.plugin.settings.graph.maxVisibleEdges = val;
             await this.plugin.saveSettings();
           })
       );
