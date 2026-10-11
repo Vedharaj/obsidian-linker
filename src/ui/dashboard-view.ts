@@ -1,6 +1,8 @@
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import type SemanticAutolinkerPlugin from "../main";
 import { ProgressState } from "../jobs/progress-manager";
+import { GRAPH_VIEW_TYPE } from "../graph/graph-view";
+import { REVIEW_VIEW_TYPE } from "./review-view";
 
 export const DASHBOARD_VIEW_TYPE = "semantic-autolinker-dashboard-view";
 
@@ -42,14 +44,13 @@ export class DashboardView extends ItemView {
   public logActivity(message: string): void {
     const time = new Date().toLocaleTimeString();
     this.activityLogs.push(`[${time}] ${message}`);
-    if (this.activityLogs.length > 50) this.activityLogs.shift();
+    if (this.activityLogs.length > 200) this.activityLogs.shift();
     const listEl = this.contentEl.querySelector(".semantic-activity-list");
     if (listEl) {
       const item = document.createElement("div");
       item.className = "semantic-activity-item";
-      item.innerHTML = `<span class="semantic-activity-time">${time}</span> <span>${message}</span>`;
+      item.innerHTML = `<span class="semantic-activity-time">[${time}]</span> <span>${message}</span>`;
       listEl.appendChild(item);
-      listEl.scrollTop = listEl.scrollHeight;
     }
   }
 
@@ -231,22 +232,16 @@ export class DashboardView extends ItemView {
       cls: "semantic-button-secondary",
       text: "Open Knowledge Graph",
     });
-    openGraphBtn.addEventListener("click", () => {
-      this.app.workspace.getLeavesOfType("semantic-autolinker-graph-view")[0]?.setViewState({
-        type: "semantic-autolinker-graph-view",
-        active: true,
-      });
+    openGraphBtn.addEventListener("click", async () => {
+      await this.plugin.activateView(GRAPH_VIEW_TYPE);
     });
 
     const reviewBtn = secondaryBar.createEl("button", {
       cls: "semantic-button-secondary",
       text: "Review Link Proposals",
     });
-    reviewBtn.addEventListener("click", () => {
-      this.app.workspace.getLeavesOfType("semantic-autolinker-review-view")[0]?.setViewState({
-        type: "semantic-autolinker-review-view",
-        active: true,
-      });
+    reviewBtn.addEventListener("click", async () => {
+      await this.plugin.activateView(REVIEW_VIEW_TYPE);
     });
 
     // Activity Log Section
@@ -254,7 +249,13 @@ export class DashboardView extends ItemView {
     const activityList = container.createDiv({ cls: "semantic-activity-list" });
     for (const log of this.activityLogs) {
       const item = activityList.createDiv({ cls: "semantic-activity-item" });
-      item.setText(log);
+      const match = log.match(/^(\[[^\]]+\])\s*(.*)$/);
+      if (match) {
+        item.createSpan({ cls: "semantic-activity-time", text: match[1] });
+        item.createSpan({ text: ` ${match[2]}` });
+      } else {
+        item.setText(log);
+      }
     }
   }
 

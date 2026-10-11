@@ -473,6 +473,11 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     if (leaf) {
       workspace.revealLeaf(leaf);
 
+      const rightSplit = (workspace as any).rightSplit;
+      if (rightSplit && rightSplit.collapsed) {
+        rightSplit.expand();
+      }
+
       // If opening graph view, pass active graph data
       if (viewType === GRAPH_VIEW_TYPE) {
         const view = leaf.view as GraphView;

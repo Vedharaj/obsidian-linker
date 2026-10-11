@@ -221,7 +221,16 @@ export class GraphView extends ItemView {
         sidebar.empty();
         sidebar.style.display = "block";
 
-        sidebar.createEl("h3", { text: nodeDetail.label });
+        const header = sidebar.createDiv({ cls: "semantic-sidebar-header" });
+        header.createEl("h3", { text: nodeDetail.label });
+        const closeBtn = header.createEl("button", {
+          cls: "semantic-sidebar-close",
+          text: "✕",
+        });
+        closeBtn.addEventListener("click", () => {
+          sidebar.style.display = "none";
+        });
+
         sidebar.createEl("p", { text: `Path: ${nodeDetail.path}` });
         sidebar.createEl("p", { text: `Connections: ${nodeDetail.degree}` });
 
@@ -250,7 +259,16 @@ export class GraphView extends ItemView {
         sidebar.empty();
         sidebar.style.display = "block";
 
-        sidebar.createEl("h3", { text: "Relationship Details" });
+        const header = sidebar.createDiv({ cls: "semantic-sidebar-header" });
+        header.createEl("h3", { text: "Relationship Details" });
+        const closeBtn = header.createEl("button", {
+          cls: "semantic-sidebar-close",
+          text: "✕",
+        });
+        closeBtn.addEventListener("click", () => {
+          sidebar.style.display = "none";
+        });
+
         sidebar.createEl("p", { text: `${edgeDetail.sourceLabel} ⟷ ${edgeDetail.targetLabel}` });
         sidebar.createEl("p", { text: `Type: ${edgeDetail.type}` });
         sidebar.createEl("p", { text: `Score: ${(edgeDetail.weight * 100).toFixed(1)}%` });
