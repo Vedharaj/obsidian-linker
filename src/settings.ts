@@ -44,6 +44,7 @@ export const DEFAULT_SETTINGS: SemanticAutolinkerSettings = {
     autoWriteEnabled: false, // strictly dry-run by default
     directAutoApply: false,
     linkOnlyTitleHeading: false,
+    linkDates: true,
     maxLinksPerNote: 15,
     requireWordBoundary: true,
     caseSensitive: false,

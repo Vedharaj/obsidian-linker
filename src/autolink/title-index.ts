@@ -108,17 +108,18 @@ export class TitleIndex {
     if (linkOnlyTitleHeading) return;
 
     for (const kw of keywords) {
-      if (TextNormalizer.isSymbolSequence(kw) || !TextNormalizer.hasAlphabeticContent(kw)) {
-        continue;
-      }
+      if (TextNormalizer.isSymbolSequence(kw)) continue;
+      if (!TextNormalizer.hasAlphabeticContent(kw) && !TextNormalizer.isDate(kw)) continue;
 
-      // Check if keyword has dates or numbering: e.g. "5.[keyword]", "[keyword 1]", "meeting 2026-10-11"
       const dateExt = TextNormalizer.extractDateAndKeyword(kw);
-      const cleanKw = TextNormalizer.stripNumbering(dateExt.cleanKeyword || kw);
-
-      this.addKeywordPhrase(kw, path);
-      if (cleanKw && cleanKw.length >= 2 && cleanKw.toLowerCase() !== kw.toLowerCase()) {
-        this.addKeywordPhrase(cleanKw, path);
+      if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
+        const cleanKw = TextNormalizer.stripNumbering(dateExt.cleanKeyword);
+        if (cleanKw && cleanKw.length >= 2) {
+          this.addKeywordPhrase(cleanKw, path);
+        }
+      } else {
+        const cleanKw = TextNormalizer.stripNumbering(kw);
+        this.addKeywordPhrase(cleanKw || kw, path);
       }
     }
 
@@ -126,64 +127,72 @@ export class TitleIndex {
   }
 
   private indexTitleWithVariants(rawTitle: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(rawTitle) || !TextNormalizer.hasAlphabeticContent(rawTitle)) {
-      return;
-    }
+    if (TextNormalizer.isSymbolSequence(rawTitle)) return;
+    if (!TextNormalizer.hasAlphabeticContent(rawTitle) && !TextNormalizer.isDate(rawTitle)) return;
 
-    // 1. Exact title
-    this.addTitlePhrase(rawTitle, path);
-
-    // 2. Separate date and keyword: e.g. "Meeting 2026-10-11", "[keyword] [date]"
     const dateExt = TextNormalizer.extractDateAndKeyword(rawTitle);
     if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
+      // It has both a date AND a keyword (e.g. "Meeting 2026-10-11")!
+      // RULE: Date must NOT be included with any linker/keyword!
+      // Index ONLY the clean keyword:
       this.addTitlePhrase(dateExt.cleanKeyword, path);
-    }
-
-    // 3. Skip numbering prefix/suffix: e.g. "5.[keyword]", "[keyword 1]", "[keyword-1]", "5. Python"
-    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawTitle);
-    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawTitle.toLowerCase()) {
-      this.addTitlePhrase(cleanNum, path);
+      const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== dateExt.cleanKeyword.toLowerCase()) {
+        this.addTitlePhrase(cleanNum, path);
+      }
+    } else {
+      // Either purely a date ("2026-10-11") or normal title without date ("Neural Networks")
+      this.addTitlePhrase(rawTitle, path);
+      const cleanNum = TextNormalizer.stripNumbering(rawTitle);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawTitle.toLowerCase()) {
+        this.addTitlePhrase(cleanNum, path);
+      }
     }
   }
 
   private indexAliasWithVariants(rawAlias: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(rawAlias) || !TextNormalizer.hasAlphabeticContent(rawAlias)) {
-      return;
-    }
-
-    this.addAliasPhrase(rawAlias, path);
+    if (TextNormalizer.isSymbolSequence(rawAlias)) return;
+    if (!TextNormalizer.hasAlphabeticContent(rawAlias) && !TextNormalizer.isDate(rawAlias)) return;
 
     const dateExt = TextNormalizer.extractDateAndKeyword(rawAlias);
     if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
       this.addAliasPhrase(dateExt.cleanKeyword, path);
-    }
-
-    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawAlias);
-    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawAlias.toLowerCase()) {
-      this.addAliasPhrase(cleanNum, path);
+      const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== dateExt.cleanKeyword.toLowerCase()) {
+        this.addAliasPhrase(cleanNum, path);
+      }
+    } else {
+      this.addAliasPhrase(rawAlias, path);
+      const cleanNum = TextNormalizer.stripNumbering(rawAlias);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawAlias.toLowerCase()) {
+        this.addAliasPhrase(cleanNum, path);
+      }
     }
   }
 
   private indexHeadingWithVariants(rawHeading: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(rawHeading) || !TextNormalizer.hasAlphabeticContent(rawHeading)) {
-      return;
-    }
-
-    this.addHeadingPhrase(rawHeading, path, rawHeading);
+    if (TextNormalizer.isSymbolSequence(rawHeading)) return;
+    if (!TextNormalizer.hasAlphabeticContent(rawHeading) && !TextNormalizer.isDate(rawHeading)) return;
 
     const dateExt = TextNormalizer.extractDateAndKeyword(rawHeading);
     if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
       this.addHeadingPhrase(dateExt.cleanKeyword, path, rawHeading);
-    }
-
-    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawHeading);
-    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawHeading.toLowerCase()) {
-      this.addHeadingPhrase(cleanNum, path, rawHeading);
+      const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== dateExt.cleanKeyword.toLowerCase()) {
+        this.addHeadingPhrase(cleanNum, path, rawHeading);
+      }
+    } else {
+      this.addHeadingPhrase(rawHeading, path, rawHeading);
+      const cleanNum = TextNormalizer.stripNumbering(rawHeading);
+      if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawHeading.toLowerCase()) {
+        this.addHeadingPhrase(cleanNum, path, rawHeading);
+      }
     }
   }
 
   private addTitlePhrase(phrase: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    if (TextNormalizer.isSymbolSequence(phrase)) return;
+    if (!TextNormalizer.hasAlphabeticContent(phrase) && !TextNormalizer.isDate(phrase)) return;
     const norm = TextNormalizer.normalizeTerm(phrase);
     if (norm.length < 2) return;
     const paths = this.titleMap.get(norm) || [];
@@ -192,7 +201,8 @@ export class TitleIndex {
   }
 
   private addAliasPhrase(phrase: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    if (TextNormalizer.isSymbolSequence(phrase)) return;
+    if (!TextNormalizer.hasAlphabeticContent(phrase) && !TextNormalizer.isDate(phrase)) return;
     const norm = TextNormalizer.normalizeTerm(phrase);
     if (norm.length < 2) return;
     const paths = this.aliasMap.get(norm) || [];
@@ -201,7 +211,8 @@ export class TitleIndex {
   }
 
   private addHeadingPhrase(phrase: string, path: string, originalHeading: string): void {
-    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    if (TextNormalizer.isSymbolSequence(phrase)) return;
+    if (!TextNormalizer.hasAlphabeticContent(phrase) && !TextNormalizer.isDate(phrase)) return;
     const norm = TextNormalizer.normalizeTerm(phrase);
     if (norm.length < 2) return;
     if (this.titleMap.has(norm)) return; // Title takes precedence
@@ -214,7 +225,8 @@ export class TitleIndex {
   }
 
   private addKeywordPhrase(phrase: string, path: string): void {
-    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    if (TextNormalizer.isSymbolSequence(phrase)) return;
+    if (!TextNormalizer.hasAlphabeticContent(phrase) && !TextNormalizer.isDate(phrase)) return;
     const norm = TextNormalizer.normalizeTerm(phrase);
     if (norm.length < 2) return;
     if (this.titleMap.has(norm) || this.aliasMap.has(norm)) return;

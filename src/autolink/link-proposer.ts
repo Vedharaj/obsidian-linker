@@ -50,7 +50,7 @@ export class LinkProposer {
       }
 
       // RULE: Skip any sequence of symbols
-      if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) {
+      if (TextNormalizer.isSymbolSequence(phrase) || (!TextNormalizer.hasAlphabeticContent(phrase) && !TextNormalizer.isDate(phrase))) {
         continue;
       }
 
@@ -79,23 +79,39 @@ export class LinkProposer {
         if (proposalCount >= this.settings.maxLinksPerNote) break;
 
         // Group 1 contains the matched text
-        const matchedText = match[1] || match[0];
+        let matchedText = match[1] || match[0];
 
         // Skip any sequence of symbols
-        if (TextNormalizer.isSymbolSequence(matchedText) || !TextNormalizer.hasAlphabeticContent(matchedText)) {
+        if (TextNormalizer.isSymbolSequence(matchedText) || (!TextNormalizer.hasAlphabeticContent(matchedText) && !TextNormalizer.isDate(matchedText))) {
           continue;
         }
 
-        const startOffset = match.index + (match[0].indexOf(matchedText));
-        const endOffset = startOffset + matchedText.length;
+        let startOffset = match.index + (match[0].indexOf(matchedText));
+        let endOffset = startOffset + matchedText.length;
+
+        // Check if matched term is enclosed by single square brackets [term] in raw content
+        // e.g. [Sprint Planning] -> absorb brackets so replacement is [[Sprint Planning]]
+        if (
+          startOffset > 0 &&
+          endOffset < rawContent.length &&
+          rawContent[startOffset - 1] === "[" &&
+          rawContent[endOffset] === "]" &&
+          (startOffset === 1 || rawContent[startOffset - 2] !== "[") &&
+          (endOffset + 1 >= rawContent.length || rawContent[endOffset + 1] !== "]")
+        ) {
+          startOffset -= 1;
+          endOffset += 1;
+          matchedText = rawContent.substring(startOffset, endOffset);
+        }
 
         if (isOccupied(startOffset, endOffset)) {
           continue;
         }
 
+        const cleanForWikilink = matchedText.replace(/^\[(.*)\]$/, "$1");
         const replacementText = AliasResolver.formatWikilink(
           targetInfo.targetPath,
-          matchedText,
+          cleanForWikilink,
           targetInfo.subpath
         );
 
@@ -104,6 +120,7 @@ export class LinkProposer {
           alias: 0.95,
           heading: 0.90,
           keyword: 0.85,
+          date: 0.95,
         };
 
         const proposalId = `prop_${sourcePath}_${startOffset}_${Date.now()}`;
@@ -123,6 +140,64 @@ export class LinkProposer {
         });
 
         occupiedRanges.push({ start: startOffset, end: endOffset });
+        proposalCount++;
+      }
+    }
+
+    // RULE: All date formats as separate links (never combined with keywords)
+    if (this.settings.linkDates !== false) {
+      const dateMatches = TextNormalizer.findDateMatches(masked);
+      for (const dm of dateMatches) {
+        if (proposalCount >= this.settings.maxLinksPerNote) break;
+        if (isOccupied(dm.start, dm.end)) continue;
+
+        // Resolve target in vault if a matching date note exists
+        const candidateTargets = [dm.cleanDate, dm.isoDate].filter(Boolean) as string[];
+        let targetPath = dm.cleanDate;
+        let foundExistingNote = false;
+
+        for (const candidate of candidateTargets) {
+          const info = this.titleIndex.resolveTarget(candidate);
+          if (info) {
+            targetPath = info.targetPath;
+            foundExistingNote = true;
+            break;
+          }
+        }
+
+        // Avoid self-referencing if current note IS this date note
+        if (foundExistingNote && targetPath === sourcePath) {
+          continue;
+        }
+        if (sourcePath.endsWith("/" + dm.cleanDate + ".md") || sourcePath === dm.cleanDate + ".md") {
+          continue;
+        }
+
+        // Format replacement wikilink
+        let replacementText: string;
+        if (foundExistingNote) {
+          replacementText = AliasResolver.formatWikilink(targetPath, dm.cleanDate);
+        } else {
+          replacementText = `[[${dm.cleanDate}]]`;
+        }
+
+        const proposalId = `prop_${sourcePath}_${dm.start}_${Date.now()}`;
+        proposals.push({
+          id: proposalId,
+          sourcePath,
+          targetPath: targetPath.endsWith(".md") ? targetPath : `${targetPath}.md`,
+          matchedText: dm.raw,
+          replacementText,
+          matchType: "date",
+          score: 0.95,
+          startOffset: dm.start,
+          endOffset: dm.end,
+          originalContentHash: contentHash,
+          status: "pending",
+          createdAt: Date.now(),
+        });
+
+        occupiedRanges.push({ start: dm.start, end: dm.end });
         proposalCount++;
       }
     }

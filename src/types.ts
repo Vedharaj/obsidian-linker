@@ -70,7 +70,7 @@ export interface JobRecord {
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "applied" | "stale";
-export type MatchType = "title" | "alias" | "keyword" | "heading";
+export type MatchType = "title" | "alias" | "keyword" | "heading" | "date";
 
 export interface LinkProposal {
   id: string;
@@ -150,6 +150,7 @@ export interface AutolinkSettings {
   autoWriteEnabled: boolean;
   directAutoApply?: boolean;
   linkOnlyTitleHeading?: boolean;
+  linkDates?: boolean;
   maxLinksPerNote: number;
   requireWordBoundary: boolean;
   caseSensitive: boolean;

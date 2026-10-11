@@ -199,4 +199,148 @@ Divider line below:
     expect(proposals.some(p => p.matchedText === "backpropagation")).toBe(false);
     expect(proposals.some(p => p.matchedText === "loss function")).toBe(false);
   });
+
+  it("recognizes all standard date formats and validates TextNormalizer.isDate", () => {
+    const validDates = [
+      "2026-10-11",
+      "2026/10/11",
+      "2026.10.11",
+      "2026_10_11",
+      "11-10-2026",
+      "11/10/2026",
+      "11.10.2026",
+      "10-11-2026",
+      "October 11, 2026",
+      "11 October 2026",
+      "Oct 11 2026",
+      "11th Oct 2026",
+      "October 2026",
+      "2026-10",
+      "20261011",
+      "[2026-10-11]",
+      "[October 11, 2026]",
+    ];
+
+    for (const d of validDates) {
+      expect(TextNormalizer.isDate(d)).toBe(true);
+    }
+
+    const nonDates = [
+      "Neural Networks",
+      "Machine Learning",
+      "-----",
+      "=====",
+      "version 1.0.4",
+      "12345",
+      "C++",
+    ];
+
+    for (const nd of nonDates) {
+      expect(TextNormalizer.isDate(nd)).toBe(false);
+    }
+  });
+
+  it("links all date formats as separate links and NEVER includes date inside keyword/linker link", () => {
+    const titleIndex = new TitleIndex();
+
+    // Vault files: note with date in title, note with brackets, note with regular title
+    titleIndex.buildFromVaultFiles([
+      { path: "Notes/Meeting 2026-10-11.md", basename: "Meeting 2026-10-11" },
+      { path: "Notes/Sprint Planning.md", basename: "Sprint Planning" },
+      { path: "Notes/2024-05-15 Daily Log.md", basename: "2024-05-15 Daily Log" },
+      { path: "Notes/2026-10-11.md", basename: "2026-10-11" }, // Daily note
+    ]);
+
+    const phrases = titleIndex.getSortedPhrases();
+
+    // RULE: Dates must NOT be included with any linker/keyword phrase in TitleIndex!
+    // "Meeting 2026-10-11" must NOT exist as a single phrase!
+    expect(phrases.some(p => p.phrase === "meeting 2026-10-11")).toBe(false);
+    // "2024-05-15 Daily Log" must NOT exist as a single phrase!
+    expect(phrases.some(p => p.phrase === "2024-05-15 daily log")).toBe(false);
+
+    // Clean keywords MUST exist
+    expect(phrases.some(p => p.phrase === "meeting")).toBe(true);
+    expect(phrases.some(p => p.phrase === "sprint planning")).toBe(true);
+    expect(phrases.some(p => p.phrase === "daily log")).toBe(true);
+
+    const proposer = new LinkProposer(titleIndex, {
+      autoWriteEnabled: false,
+      maxLinksPerNote: 15,
+      requireWordBoundary: true,
+      caseSensitive: false,
+      matchAliases: true,
+      disambiguateDuplicates: true,
+      linkHeadings: true,
+      linkKeywords: true,
+      linkDates: true,
+    });
+
+    const doc = `
+# Meeting & Planning
+We held a Meeting 2026-10-11 in the morning.
+Next is [Sprint Planning] [2026-10-11] with team.
+Reference the 2024-05-15 Daily Log for context.
+Reviewed on October 11, 2026 and finalised 15/05/2024.
+Already linked [[2026-10-11]] must be preserved.
+`;
+
+    const proposals = proposer.generateProposals("Notes/ActiveProject.md", doc);
+
+    // 1. "Meeting 2026-10-11" must produce TWO separate links:
+    // Proposal for "Meeting" (targeting Notes/Meeting 2026-10-11.md as [[Meeting 2026-10-11|Meeting]])
+    const meetingProp = proposals.find(p => p.matchedText === "Meeting");
+    expect(meetingProp).toBeDefined();
+    expect(meetingProp?.replacementText).toBe("[[Meeting 2026-10-11|Meeting]]");
+
+    // Proposal for "2026-10-11" as separate link [[2026-10-11]]
+    const dateProp1 = proposals.find(p => p.matchedText === "2026-10-11");
+    expect(dateProp1).toBeDefined();
+    expect(dateProp1?.replacementText).toBe("[[2026-10-11]]");
+
+    // 2. "[Sprint Planning] [2026-10-11]" must produce TWO separate links:
+    const sprintProp = proposals.find(p => p.matchedText === "[Sprint Planning]");
+    expect(sprintProp).toBeDefined();
+    expect(sprintProp?.replacementText).toBe("[[Sprint Planning]]");
+
+    const datePropBracket = proposals.find(p => p.matchedText === "[2026-10-11]");
+    expect(datePropBracket).toBeDefined();
+    expect(datePropBracket?.replacementText).toBe("[[2026-10-11]]");
+
+    // 3. "2024-05-15 Daily Log" must produce TWO separate links:
+    const dateProp2024 = proposals.find(p => p.matchedText === "2024-05-15");
+    expect(dateProp2024).toBeDefined();
+    expect(dateProp2024?.replacementText).toBe("[[2024-05-15]]");
+
+    const dailyLogProp = proposals.find(p => p.matchedText === "Daily Log");
+    expect(dailyLogProp).toBeDefined();
+    expect(dailyLogProp?.replacementText).toBe("[[2024-05-15 Daily Log|Daily Log]]");
+
+    // 4. Standalone dates: "October 11, 2026" and "15/05/2024"
+    const octProp = proposals.find(p => p.matchedText === "October 11, 2026");
+    expect(octProp).toBeDefined();
+
+    const dmyProp = proposals.find(p => p.matchedText === "15/05/2024");
+    expect(dmyProp).toBeDefined();
+    expect(dmyProp?.replacementText).toBe("[[15/05/2024]]");
+
+    // Apply rewrite and verify final markdown text
+    const res = MarkdownRewriter.rewriteContent(doc, proposals);
+    expect(res.success).toBe(true);
+
+    // Verify Meeting 2026-10-11 separated into two links:
+    expect(res.modifiedContent).toContain("[[Meeting 2026-10-11|Meeting]] [[2026-10-11]]");
+
+    // Verify [Sprint Planning] [2026-10-11] separated into two clean links (no triple brackets):
+    expect(res.modifiedContent).toContain("[[Sprint Planning]] [[2026-10-11]]");
+
+    // Verify 2024-05-15 Daily Log separated into two links:
+    expect(res.modifiedContent).toContain("[[2024-05-15]] [[2024-05-15 Daily Log|Daily Log]]");
+
+    // Verify standalone dates:
+    expect(res.modifiedContent).toContain("[[15/05/2024]]");
+
+    // Verify existing [[2026-10-11]] was preserved:
+    expect(res.modifiedContent).toContain("Already linked [[2026-10-11]] must be preserved.");
+  });
 });
