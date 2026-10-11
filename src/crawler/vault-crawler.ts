@@ -82,8 +82,12 @@ export class VaultCrawler {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (onProgress) {
+      if (onProgress && (i % 25 === 0 || i === files.length - 1)) {
         onProgress(i, files.length, file.path);
+      }
+
+      if (i % 25 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
       }
 
       const eligibility = this.filter.isEligible(file.path, file.size);

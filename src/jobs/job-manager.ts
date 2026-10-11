@@ -107,7 +107,7 @@ export class JobManager {
   }
 
   private async yieldThread(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 1));
+    return new Promise((resolve) => setTimeout(resolve, 5));
   }
 
   private async executeScanLoop(): Promise<void> {
@@ -244,6 +244,7 @@ export class JobManager {
         this.currentJob.errorCount = this.errorReporter.count;
         this.currentJob.updatedAt = Date.now();
         await this.storage.saveJob(this.currentJob);
+        this.progressManager.setStage("complete", 100, `Scan failed: ${err.message}`);
       }
     }
   }

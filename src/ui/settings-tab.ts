@@ -146,6 +146,44 @@ export class SemanticAutolinkerSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl)
+      .setName("Link Headings")
+      .setDesc("Index note headings as link targets (e.g. [[Target#Heading|Heading]])")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autolink.linkHeadings ?? true)
+          .onChange(async (val) => {
+            this.plugin.settings.autolink.linkHeadings = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Link Extracted Keywords")
+      .setDesc("Index top distinctive keywords and terms from notes as link targets")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autolink.linkKeywords ?? true)
+          .onChange(async (val) => {
+            this.plugin.settings.autolink.linkKeywords = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Minimum Keyword Length")
+      .setDesc("Minimum length of words to consider as distinctive keywords")
+      .addSlider((slider) =>
+        slider
+          .setLimits(3, 8, 1)
+          .setValue(this.plugin.settings.autolink.minKeywordLength ?? 3)
+          .setDynamicTooltip()
+          .onChange(async (val) => {
+            this.plugin.settings.autolink.minKeywordLength = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
     // 4. Graph
     containerEl.createEl("h3", { text: "Interactive Knowledge Graph" });
 

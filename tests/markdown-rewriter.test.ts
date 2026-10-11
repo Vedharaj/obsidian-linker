@@ -143,4 +143,59 @@ Also mentions Artificial Intelligence and Robotics in prose.
     // Verify replacement text
     expect(roboticsProposals[0].replacementText).toBe("[[Robotics]]");
   });
+
+  it("links note headings and keywords correctly with formatted wikilinks", () => {
+    const titleIndex = new TitleIndex();
+    titleIndex.buildFromVaultFiles(
+      [
+        { path: "Notes/Deep Learning.md", basename: "Deep Learning" },
+        { path: "Notes/Algorithms.md", basename: "Algorithms" },
+      ],
+      (path) => {
+        if (path === "Notes/Deep Learning.md") {
+          return {
+            aliases: ["DL"],
+            headings: ["Convolutional Networks", "Backpropagation"],
+          };
+        }
+        return undefined;
+      }
+    );
+
+    // Add extracted keyword
+    titleIndex.addKeywordsForNote("Notes/Algorithms.md", ["binary search"]);
+
+    const proposer = new LinkProposer(titleIndex, {
+      autoWriteEnabled: false,
+      maxLinksPerNote: 10,
+      requireWordBoundary: true,
+      caseSensitive: false,
+      matchAliases: true,
+      disambiguateDuplicates: true,
+      linkHeadings: true,
+      linkKeywords: true,
+    });
+
+    const doc = "In this lecture we cover binary search and Backpropagation.";
+    const proposals = proposer.generateProposals("Notes/Intro.md", doc);
+
+    expect(proposals.length).toBe(2);
+
+    const headingProp = proposals.find((p) => p.matchedText.toLowerCase() === "backpropagation");
+    expect(headingProp).toBeDefined();
+    expect(headingProp?.matchType).toBe("heading");
+    expect(headingProp?.replacementText).toBe("[[Deep Learning#Backpropagation|Backpropagation]]");
+
+    const kwProp = proposals.find((p) => p.matchedText.toLowerCase() === "binary search");
+    expect(kwProp).toBeDefined();
+    expect(kwProp?.matchType).toBe("keyword");
+    expect(kwProp?.replacementText).toBe("[[Algorithms|binary search]]");
+
+    // Rewrite test
+    const rewrite = MarkdownRewriter.rewriteContent(doc, proposals);
+    expect(rewrite.success).toBe(true);
+    expect(rewrite.modifiedContent).toBe(
+      "In this lecture we cover [[Algorithms|binary search]] and [[Deep Learning#Backpropagation|Backpropagation]]."
+    );
+  });
 });

@@ -47,8 +47,32 @@ export class ReviewView extends ItemView {
     });
     genBtn.addEventListener("click", async () => {
       new Notice("Scanning vault notes for link opportunities...");
+      let notesToScan = this.indexManager.notes;
+      if (notesToScan.size === 0) {
+        notesToScan = new Map();
+        const files = this.app.vault.getMarkdownFiles();
+        for (const f of files) {
+          const cache = this.app.metadataCache.getFileCache(f);
+          const aliases = cache?.frontmatter?.aliases
+            ? Array.isArray(cache.frontmatter.aliases)
+              ? cache.frontmatter.aliases
+              : [cache.frontmatter.aliases]
+            : [];
+          notesToScan.set(f.path, {
+            id: f.path,
+            path: f.path,
+            title: f.basename,
+            aliases,
+            contentHash: "",
+            wordCount: 0,
+            indexedAt: Date.now(),
+            status: "indexed",
+          });
+        }
+      }
+
       await this.reviewManager.generateProposalsForVault(
-        this.indexManager.notes,
+        notesToScan,
         async (path) => {
           const file = this.app.vault.getAbstractFileByPath(path);
           if (file instanceof TFile) return await this.app.vault.read(file);

@@ -1,7 +1,9 @@
 import { Plugin, WorkspaceLeaf, Notice, TFile } from "obsidian";
 import { SemanticAutolinkerSettings } from "./types";
 import { DEFAULT_SETTINGS } from "./settings";
+import { IPluginStorage } from "./storage/storage-interface";
 import { IndexedDbStorage } from "./storage/indexeddb-storage";
+import { MemoryStorage } from "./storage/memory-storage";
 import { FileFilter } from "./crawler/file-filter";
 import { ObsidianVaultAdapter, VaultCrawler } from "./crawler/vault-crawler";
 import { IndexManager } from "./indexing/index-manager";
@@ -14,7 +16,7 @@ import { SemanticAutolinkerSettingTab } from "./ui/settings-tab";
 
 export default class SemanticAutolinkerPlugin extends Plugin {
   public settings: SemanticAutolinkerSettings = DEFAULT_SETTINGS;
-  public storage!: IndexedDbStorage;
+  public storage!: IPluginStorage;
   public fileFilter!: FileFilter;
   public vaultAdapter!: ObsidianVaultAdapter;
   public crawler!: VaultCrawler;
@@ -26,13 +28,21 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     console.log("Loading Obsidian Semantic Auto-Linker plugin");
     await this.loadSettings();
 
-    // Initialize Storage
-    this.storage = new IndexedDbStorage();
+    // Initialize Storage with safe timeout & in-memory fallback
+    let storage: IPluginStorage = new IndexedDbStorage();
     try {
-      await this.storage.initialize();
+      await Promise.race([
+        storage.initialize(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("IndexedDB initialization timed out")), 2500)
+        ),
+      ]);
     } catch (err) {
-      console.warn("Could not initialize IndexedDB directly, continuing with in-memory fallback:", err);
+      console.warn("Could not initialize IndexedDB directly, falling back to MemoryStorage:", err);
+      storage = new MemoryStorage();
+      await storage.initialize();
     }
+    this.storage = storage;
 
     // Initialize Core Services
     this.fileFilter = new FileFilter(this.settings.fileFilter);
@@ -42,13 +52,20 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     this.jobManager = new JobManager(this.storage, this.settings, this.crawler, this.indexManager);
     this.reviewManager = new ReviewManager(this.storage, this.settings.autolink);
 
-    // Load existing index from persistent storage into memory
-    await this.indexManager.loadFromStorage();
+    // Load existing index from persistent storage into memory (if previously indexed)
+    try {
+      await this.indexManager.loadFromStorage();
+    } catch (err) {
+      console.warn("Could not load index from storage:", err);
+    }
+
+    // Immediately build Title & Keyword Index from vault metadata cache
+    this.refreshTitleIndex();
 
     // Register Custom Views
     this.registerView(
       DASHBOARD_VIEW_TYPE,
-      (leaf: WorkspaceLeaf) => new DashboardView(leaf, this.jobManager, this.reviewManager)
+      (leaf: WorkspaceLeaf) => new DashboardView(leaf, this)
     );
 
     this.registerView(
@@ -70,7 +87,57 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       this.activateView(GRAPH_VIEW_TYPE);
     });
 
+    this.addRibbonIcon("link", "Auto-Link Current Note (Instant)", async () => {
+      await this.autoLinkActiveNote(true);
+    });
+
     // Register Commands
+    this.addCommand({
+      id: "auto-link-active-note-instant",
+      name: "Auto-Link Current Note (Instant)",
+      checkCallback: (checking: boolean) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && activeFile.extension === "md") {
+          if (!checking) {
+            this.autoLinkActiveNote(true);
+          }
+          return true;
+        }
+        return false;
+      },
+    });
+
+    this.addCommand({
+      id: "propose-for-active-note",
+      name: "Scan & Propose Links for Active Note (Review Queue)",
+      checkCallback: (checking: boolean) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && activeFile.extension === "md") {
+          if (!checking) {
+            this.autoLinkActiveNote(false);
+          }
+          return true;
+        }
+        return false;
+      },
+    });
+
+    this.addCommand({
+      id: "auto-link-vault-instant",
+      name: "Auto-Link Entire Vault (Instant with Undo)",
+      callback: async () => {
+        await this.autoLinkVault(true);
+      },
+    });
+
+    this.addCommand({
+      id: "rollback-last-autolink",
+      name: "Rollback Last Auto-Link (Undo)",
+      callback: async () => {
+        await this.rollbackLastAutoLink();
+      },
+    });
+
     this.addCommand({
       id: "open-dashboard",
       name: "Open Semantic Auto-Linker Dashboard",
@@ -98,21 +165,6 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: "propose-for-active-note",
-      name: "Scan & Propose Links for Active Note",
-      checkCallback: (checking: boolean) => {
-        const activeFile = this.app.workspace.getActiveFile();
-        if (activeFile && activeFile.extension === "md") {
-          if (!checking) {
-            this.proposeForFile(activeFile);
-          }
-          return true;
-        }
-        return false;
-      },
-    });
-
     // Register Settings Tab
     this.addSettingTab(new SemanticAutolinkerSettingTab(this.app, this));
 
@@ -124,6 +176,7 @@ export default class SemanticAutolinkerPlugin extends Plugin {
           if (eligibility.eligible) {
             const content = await this.app.vault.read(file);
             await this.indexManager.updateNote(file.path, file.basename, content);
+            this.refreshTitleIndex();
           }
         }
       })
@@ -133,6 +186,7 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       this.app.vault.on("delete", async (file) => {
         if (file instanceof TFile && file.extension === "md") {
           await this.indexManager.removeNote(file.path);
+          this.refreshTitleIndex();
         }
       })
     );
@@ -141,6 +195,7 @@ export default class SemanticAutolinkerPlugin extends Plugin {
       this.app.vault.on("rename", async (file, oldPath) => {
         if (file instanceof TFile && file.extension === "md") {
           await this.indexManager.renameNote(oldPath, file.path, file.basename);
+          this.refreshTitleIndex();
         }
       })
     );
@@ -165,6 +220,206 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     if (this.fileFilter) this.fileFilter.updateSettings(this.settings.fileFilter);
     if (this.indexManager) this.indexManager.updateSettings(this.settings);
     if (this.reviewManager) this.reviewManager.updateSettings(this.settings.autolink);
+    this.refreshTitleIndex();
+  }
+
+  public refreshTitleIndex(): void {
+    if (!this.reviewManager) return;
+    const titleIndex = this.reviewManager.getTitleIndex();
+
+    if (this.indexManager && this.indexManager.notes.size > 0) {
+      titleIndex.buildIndex(
+        this.indexManager.notes,
+        this.settings.autolink.matchAliases,
+        this.settings.autolink.linkHeadings ?? true
+      );
+
+      if (this.settings.autolink.linkKeywords ?? true) {
+        const minLen = this.settings.autolink.minKeywordLength ?? 3;
+        for (const [path, note] of this.indexManager.notes.entries()) {
+          const freqs = this.indexManager.termFrequencies.get(path);
+          if (freqs) {
+            const topTerms = Array.from(freqs.entries())
+              .filter(([t]) => t.length >= minLen)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([t]) => t);
+            titleIndex.addKeywordsForNote(path, topTerms);
+          }
+        }
+      }
+    } else {
+      const files = this.app.vault.getMarkdownFiles().filter((f) => {
+        return this.fileFilter ? this.fileFilter.isEligible(f.path, f.stat.size).eligible : true;
+      });
+
+      titleIndex.buildFromVaultFiles(
+        files.map((f) => ({ path: f.path, basename: f.basename })),
+        (path) => {
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (file instanceof TFile) {
+            const cache = this.app.metadataCache.getFileCache(file);
+            return {
+              aliases: cache?.frontmatter?.aliases
+                ? Array.isArray(cache.frontmatter.aliases)
+                  ? cache.frontmatter.aliases
+                  : [cache.frontmatter.aliases]
+                : undefined,
+              headings: cache?.headings?.map((h) => h.heading) || undefined,
+            };
+          }
+          return undefined;
+        },
+        {
+          matchAliases: this.settings.autolink.matchAliases,
+          matchHeadings: this.settings.autolink.linkHeadings ?? true,
+        }
+      );
+    }
+  }
+
+  public async autoLinkActiveNote(directApply = false): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile || activeFile.extension !== "md") {
+      new Notice("Please open a markdown note first.");
+      return;
+    }
+
+    await this.autoLinkFile(activeFile, directApply);
+  }
+
+  public async autoLinkFile(file: TFile, directApply: boolean): Promise<void> {
+    this.refreshTitleIndex();
+
+    const content = await this.app.vault.read(file);
+    const proposer = this.reviewManager.getProposer();
+    const proposals = proposer.generateProposals(file.path, content);
+
+    if (proposals.length === 0) {
+      new Notice(`No unlinked notes or keywords found for "${file.basename}".`);
+      return;
+    }
+
+    if (directApply || this.settings.autolink.autoWriteEnabled) {
+      const res = await this.reviewManager.applyProposalsDirectly(
+        file.path,
+        proposals,
+        async (p) => {
+          const f = this.app.vault.getAbstractFileByPath(p);
+          return f instanceof TFile ? await this.app.vault.read(f) : "";
+        },
+        async (p, c) => {
+          const f = this.app.vault.getAbstractFileByPath(p);
+          if (f instanceof TFile) await this.app.vault.modify(f, c);
+        }
+      );
+
+      if (res.success && res.appliedCount > 0) {
+        const topLinks = proposals
+          .slice(0, 4)
+          .map((p) => p.replacementText)
+          .join(", ");
+        const extra = proposals.length > 4 ? ` and ${proposals.length - 4} more` : "";
+        new Notice(
+          `Auto-linked ${res.appliedCount} references in "${file.basename}": ${topLinks}${extra}. (Rollback available)`
+        );
+      } else {
+        new Notice(res.error || "No links were applied.");
+      }
+    } else {
+      await this.storage.saveProposals(proposals);
+      new Notice(`Found ${proposals.length} link proposals for "${file.basename}". Opening review queue...`);
+      await this.activateView(REVIEW_VIEW_TYPE);
+    }
+  }
+
+  public async autoLinkVault(directApply: boolean): Promise<void> {
+    this.refreshTitleIndex();
+    const files = this.app.vault.getMarkdownFiles().filter((f) => {
+      return this.fileFilter.isEligible(f.path, f.stat.size).eligible;
+    });
+
+    if (files.length === 0) {
+      new Notice("No eligible markdown files found in vault.");
+      return;
+    }
+
+    new Notice(`Scanning & auto-linking across ${files.length} notes...`);
+    let totalLinkedNotes = 0;
+    let totalLinksCreated = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const content = await this.app.vault.read(file);
+        const proposer = this.reviewManager.getProposer();
+        const proposals = proposer.generateProposals(file.path, content);
+
+        if (proposals.length > 0) {
+          if (directApply) {
+            const res = await this.reviewManager.applyProposalsDirectly(
+              file.path,
+              proposals,
+              async (p) => {
+                const f = this.app.vault.getAbstractFileByPath(p);
+                return f instanceof TFile ? await this.app.vault.read(f) : "";
+              },
+              async (p, c) => {
+                const f = this.app.vault.getAbstractFileByPath(p);
+                if (f instanceof TFile) await this.app.vault.modify(f, c);
+              }
+            );
+            if (res.success && res.appliedCount > 0) {
+              totalLinkedNotes++;
+              totalLinksCreated += res.appliedCount;
+            }
+          } else {
+            await this.storage.saveProposals(proposals);
+            totalLinksCreated += proposals.length;
+          }
+        }
+      } catch (err) {
+        console.warn(`Error auto-linking ${file.path}:`, err);
+      }
+
+      if (i % 25 === 0) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+    }
+
+    if (directApply) {
+      new Notice(`Completed: Auto-linked ${totalLinksCreated} references across ${totalLinkedNotes} notes.`);
+    } else {
+      new Notice(`Generated ${totalLinksCreated} proposals. Opening review queue...`);
+      await this.activateView(REVIEW_VIEW_TYPE);
+    }
+  }
+
+  public async rollbackLastAutoLink(): Promise<void> {
+    const history = await this.reviewManager.undoManager.getHistory();
+    if (history.length === 0) {
+      new Notice("No auto-link history to undo.");
+      return;
+    }
+
+    const last = history[0];
+    const res = await this.reviewManager.undoManager.rollback(
+      last.id,
+      async (p) => {
+        const f = this.app.vault.getAbstractFileByPath(p);
+        return f instanceof TFile ? await this.app.vault.read(f) : "";
+      },
+      async (p, c) => {
+        const f = this.app.vault.getAbstractFileByPath(p);
+        if (f instanceof TFile) await this.app.vault.modify(f, c);
+      }
+    );
+
+    if (res.success) {
+      new Notice(`Successfully rolled back links in "${last.sourcePath}".`);
+    } else {
+      new Notice(`Rollback failed: ${res.error}`);
+    }
   }
 
   public async activateView(viewType: string): Promise<void> {
@@ -191,23 +446,5 @@ export default class SemanticAutolinkerPlugin extends Plugin {
         }
       }
     }
-  }
-
-  private async proposeForFile(file: TFile): Promise<void> {
-    const content = await this.app.vault.read(file);
-    const titleIndex = (this.reviewManager as any).titleIndex;
-    titleIndex.buildIndex(this.indexManager.notes, this.settings.autolink.matchAliases);
-
-    const proposer = (this.reviewManager as any).proposer;
-    const proposals = proposer.generateProposals(file.path, content);
-
-    if (proposals.length === 0) {
-      new Notice(`No new link proposals found for ${file.basename}`);
-      return;
-    }
-
-    await this.storage.saveProposals(proposals);
-    new Notice(`Found ${proposals.length} link proposals for ${file.basename}. Opening review queue...`);
-    await this.activateView(REVIEW_VIEW_TYPE);
   }
 }

@@ -62,6 +62,25 @@
   color: var(--text-on-accent);
 }
 
+/* Active Note Card */
+.semantic-active-note-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.semantic-active-note-title {
+  color: var(--text-accent);
+}
+
+.semantic-active-note-dim {
+  color: var(--text-muted);
+}
+
 /* Dashboard Metrics Grid */
 .semantic-metrics-grid {
   display: grid;

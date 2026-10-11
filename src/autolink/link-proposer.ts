@@ -76,7 +76,18 @@ export class LinkProposer {
           continue;
         }
 
-        const replacementText = AliasResolver.formatWikilink(targetInfo.targetPath, matchedText);
+        const replacementText = AliasResolver.formatWikilink(
+          targetInfo.targetPath,
+          matchedText,
+          targetInfo.subpath
+        );
+
+        const scoreMap: Record<string, number> = {
+          title: 1.0,
+          alias: 0.95,
+          heading: 0.90,
+          keyword: 0.85,
+        };
 
         const proposalId = `prop_${sourcePath}_${startOffset}_${Date.now()}`;
         proposals.push({
@@ -86,7 +97,7 @@ export class LinkProposer {
           matchedText,
           replacementText,
           matchType: type,
-          score: type === "title" ? 1.0 : 0.9,
+          score: scoreMap[type] || 0.8,
           startOffset,
           endOffset,
           originalContentHash: contentHash,

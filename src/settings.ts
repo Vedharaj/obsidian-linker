@@ -42,11 +42,15 @@ export const DEFAULT_SETTINGS: SemanticAutolinkerSettings = {
   },
   autolink: {
     autoWriteEnabled: false, // strictly dry-run by default
+    directAutoApply: false,
     maxLinksPerNote: 15,
     requireWordBoundary: true,
     caseSensitive: false,
     matchAliases: true,
     disambiguateDuplicates: true,
+    linkKeywords: true,
+    linkHeadings: true,
+    minKeywordLength: 3,
   },
   graph: {
     defaultMode: "combined",

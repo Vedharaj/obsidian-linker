@@ -1,20 +1,17 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
-import { JobManager } from "../jobs/job-manager";
-import { ReviewManager } from "../autolink/review-manager";
+import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
+import type SemanticAutolinkerPlugin from "../main";
 import { ProgressState } from "../jobs/progress-manager";
 
 export const DASHBOARD_VIEW_TYPE = "semantic-autolinker-dashboard-view";
 
 export class DashboardView extends ItemView {
-  private jobManager: JobManager;
-  private reviewManager: ReviewManager;
+  private plugin: SemanticAutolinkerPlugin;
   private unsubscribeProgress?: () => void;
   private activityLogs: string[] = [];
 
-  constructor(leaf: WorkspaceLeaf, jobManager: JobManager, reviewManager: ReviewManager) {
+  constructor(leaf: WorkspaceLeaf, plugin: SemanticAutolinkerPlugin) {
     super(leaf);
-    this.jobManager = jobManager;
-    this.reviewManager = reviewManager;
+    this.plugin = plugin;
   }
 
   public getViewType(): string {
@@ -30,8 +27,8 @@ export class DashboardView extends ItemView {
   }
 
   public async onOpen(): Promise<void> {
-    this.render();
-    this.unsubscribeProgress = this.jobManager.progressManager.subscribe((state) => {
+    await this.render();
+    this.unsubscribeProgress = this.plugin.jobManager.progressManager.subscribe((state) => {
       this.updateProgressUI(state);
     });
   }
@@ -65,25 +62,74 @@ export class DashboardView extends ItemView {
     const header = container.createDiv({ cls: "semantic-autolinker-header" });
     header.createEl("h2", { text: "Semantic Auto-Linker & Knowledge Graph" });
 
+    // Active Note banner
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeNoteCard = container.createDiv({ cls: "semantic-active-note-card" });
+    if (activeFile && activeFile.extension === "md") {
+      activeNoteCard.createEl("span", {
+        text: `📄 Active Note: ${activeFile.basename}`,
+        cls: "semantic-active-note-title",
+      });
+    } else {
+      activeNoteCard.createEl("span", {
+        text: "📄 No active markdown note open in editor",
+        cls: "semantic-active-note-dim",
+      });
+    }
+
+    // Quick Action Bar for Instant Auto-Linking
+    const quickBar = container.createDiv({ cls: "semantic-actions-bar" });
+    const quickLinkBtn = quickBar.createEl("button", {
+      cls: "semantic-button-primary",
+      text: "⚡ Auto-Link Current Note (Instant)",
+    });
+    quickLinkBtn.addEventListener("click", async () => {
+      this.logActivity(`Auto-linking current note...`);
+      await this.plugin.autoLinkActiveNote(true);
+      await this.render();
+    });
+
+    const proposeActiveBtn = quickBar.createEl("button", {
+      cls: "semantic-button-secondary",
+      text: "📋 Propose for Current Note",
+    });
+    proposeActiveBtn.addEventListener("click", async () => {
+      this.logActivity(`Proposing links for current note...`);
+      await this.plugin.autoLinkActiveNote(false);
+      await this.render();
+    });
+
+    const undoBtn = quickBar.createEl("button", {
+      cls: "semantic-button-danger",
+      text: "↩ Rollback Last Auto-Link",
+    });
+    undoBtn.addEventListener("click", async () => {
+      await this.plugin.rollbackLastAutoLink();
+      this.logActivity("Triggered rollback of last auto-link operation");
+      await this.render();
+    });
+
     // Metrics Grid
     const metricsGrid = container.createDiv({ cls: "semantic-metrics-grid" });
 
-    const notesCount = (this.jobManager as any).indexManager.notes.size;
-    const relsCount = (this.jobManager as any).indexManager.relationships.size;
-    const proposals = await this.reviewManager.getProposals();
-    const pendingCount = proposals.filter(p => p.status === "pending").length;
+    const notesCount = this.plugin.indexManager.notes.size;
+    const relsCount = this.plugin.indexManager.relationships.size;
+    const proposals = await this.plugin.reviewManager.getProposals();
+    const pendingCount = proposals.filter((p) => p.status === "pending").length;
+    const targetPhrasesCount = this.plugin.reviewManager.getTitleIndex().phraseCount;
 
-    this.createMetricCard(metricsGrid, "Notes Indexed", String(notesCount), "notes-metric");
+    this.createMetricCard(metricsGrid, "Available Targets", String(targetPhrasesCount), "phrases-metric");
+    this.createMetricCard(metricsGrid, "Indexed Notes", String(notesCount), "notes-metric");
     this.createMetricCard(metricsGrid, "Relationships", String(relsCount), "rels-metric");
     this.createMetricCard(metricsGrid, "Pending Links", String(pendingCount), "proposals-metric");
 
     // Current Job & Progress Card
     const progressCard = container.createDiv({ cls: "semantic-progress-card" });
     const progHeader = progressCard.createDiv({ cls: "semantic-progress-header" });
-    progHeader.createEl("h3", { text: "Current Job Status" });
+    progHeader.createEl("h3", { text: "Full Vault Indexing Engine" });
     const statusBadge = progHeader.createEl("span", {
       cls: "semantic-autolinker-badge badge-pending",
-      text: this.jobManager.getStatus()?.status || "Idle",
+      text: this.plugin.jobManager.getStatus()?.status || "Idle",
     });
     statusBadge.id = "semantic-job-status-badge";
 
@@ -97,16 +143,16 @@ export class DashboardView extends ItemView {
     const percentText = progDetails.createEl("span", { text: "0%" });
     percentText.id = "semantic-percent-text";
 
-    // Action Buttons Bar
+    // Vault Indexing Actions Bar
     const actionsBar = container.createDiv({ cls: "semantic-actions-bar" });
 
     const startBtn = actionsBar.createEl("button", {
       cls: "semantic-button-primary",
-      text: "Start Vault Scan",
+      text: "Start Full Vault Scan",
     });
     startBtn.addEventListener("click", async () => {
       this.logActivity("Started full vault scan");
-      await this.jobManager.startFullScan();
+      await this.plugin.jobManager.startFullScan();
     });
 
     const pauseBtn = actionsBar.createEl("button", {
@@ -114,7 +160,7 @@ export class DashboardView extends ItemView {
       text: "Pause",
     });
     pauseBtn.addEventListener("click", async () => {
-      await this.jobManager.pause();
+      await this.plugin.jobManager.pause();
       this.logActivity("Job paused");
     });
 
@@ -123,7 +169,7 @@ export class DashboardView extends ItemView {
       text: "Resume",
     });
     resumeBtn.addEventListener("click", async () => {
-      await this.jobManager.resume();
+      await this.plugin.jobManager.resume();
       this.logActivity("Job resumed");
     });
 
@@ -132,12 +178,22 @@ export class DashboardView extends ItemView {
       text: "Cancel",
     });
     cancelBtn.addEventListener("click", async () => {
-      await this.jobManager.cancel();
+      await this.plugin.jobManager.cancel();
       this.logActivity("Job cancelled");
     });
 
-    // Secondary Actions Bar
+    // Secondary Views Actions Bar
     const secondaryBar = container.createDiv({ cls: "semantic-actions-bar" });
+
+    const autoLinkVaultBtn = secondaryBar.createEl("button", {
+      cls: "semantic-button-primary",
+      text: "🌐 Auto-Link Entire Vault",
+    });
+    autoLinkVaultBtn.addEventListener("click", async () => {
+      this.logActivity("Triggered vault-wide auto-linking");
+      await this.plugin.autoLinkVault(true);
+      await this.render();
+    });
 
     const openGraphBtn = secondaryBar.createEl("button", {
       cls: "semantic-button-secondary",
@@ -189,7 +245,7 @@ export class DashboardView extends ItemView {
     if (stageEl) stageEl.setText(`Stage: ${state.currentStage} (${state.details})`);
 
     if (statusBadge) {
-      const job = this.jobManager.getStatus();
+      const job = this.plugin.jobManager.getStatus();
       statusBadge.setText(job?.status || "Idle");
       statusBadge.className = `semantic-autolinker-badge badge-${job?.status || "pending"}`;
     }
@@ -197,11 +253,15 @@ export class DashboardView extends ItemView {
     // Update notes count
     const notesEl = this.contentEl.querySelector("#notes-metric");
     if (notesEl) {
-      notesEl.setText(String((this.jobManager as any).indexManager.notes.size));
+      notesEl.setText(String(this.plugin.indexManager.notes.size));
     }
     const relsEl = this.contentEl.querySelector("#rels-metric");
     if (relsEl) {
-      relsEl.setText(String((this.jobManager as any).indexManager.relationships.size));
+      relsEl.setText(String(this.plugin.indexManager.relationships.size));
+    }
+    const phrasesEl = this.contentEl.querySelector("#phrases-metric");
+    if (phrasesEl) {
+      phrasesEl.setText(String(this.plugin.reviewManager.getTitleIndex().phraseCount));
     }
   }
 }

@@ -19,6 +19,14 @@ export class ReviewManager {
     this.undoManager = new UndoManager(storage);
   }
 
+  public getTitleIndex(): TitleIndex {
+    return this.titleIndex;
+  }
+
+  public getProposer(): LinkProposer {
+    return this.proposer;
+  }
+
   public updateSettings(settings: AutolinkSettings): void {
     this.settings = settings;
     this.proposer.updateSettings(settings);
@@ -88,5 +96,18 @@ export class ReviewManager {
     }
 
     return await this.undoManager.applyProposalsWithUndo(sourcePath, approved, readFile, writeFile);
+  }
+
+  public async applyProposalsDirectly(
+    sourcePath: string,
+    proposals: LinkProposal[],
+    readFile: (path: string) => Promise<string>,
+    writeFile: (path: string, content: string) => Promise<void>
+  ): Promise<{ success: boolean; appliedCount: number; error?: string }> {
+    for (const p of proposals) {
+      p.status = "approved";
+    }
+    await this.storage.saveProposals(proposals);
+    return await this.undoManager.applyProposalsWithUndo(sourcePath, proposals, readFile, writeFile);
   }
 }

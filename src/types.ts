@@ -70,7 +70,7 @@ export interface JobRecord {
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "applied" | "stale";
-export type MatchType = "title" | "alias" | "keyword";
+export type MatchType = "title" | "alias" | "keyword" | "heading";
 
 export interface LinkProposal {
   id: string;
@@ -148,11 +148,15 @@ export interface ProgressSettings {
 
 export interface AutolinkSettings {
   autoWriteEnabled: boolean;
+  directAutoApply?: boolean;
   maxLinksPerNote: number;
   requireWordBoundary: boolean;
   caseSensitive: boolean;
   matchAliases: boolean;
   disambiguateDuplicates: boolean;
+  linkKeywords?: boolean;
+  linkHeadings?: boolean;
+  minKeywordLength?: number;
 }
 
 export type GraphMode = "actual" | "keyword" | "similarity" | "combined" | "complete";

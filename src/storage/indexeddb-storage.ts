@@ -64,12 +64,24 @@ export class IndexedDbStorage implements IPluginStorage {
         }
       };
 
+      const timeout = setTimeout(() => {
+        reject(new Error("IndexedDB open request timed out"));
+      }, 2500);
+
+      request.onblocked = () => {
+        clearTimeout(timeout);
+        console.warn("IndexedDB open request blocked by existing connection");
+        reject(new Error("IndexedDB open request was blocked"));
+      };
+
       request.onsuccess = () => {
+        clearTimeout(timeout);
         this.db = request.result;
         resolve();
       };
 
       request.onerror = () => {
+        clearTimeout(timeout);
         reject(new Error(`Failed to open IndexedDB: ${request.error?.message}`));
       };
     });

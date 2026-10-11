@@ -83,7 +83,7 @@ export class CandidateGenerator {
           }
         }
 
-        if (onBatch && (i % 20 === 0 || i === noteIds.length - 1)) {
+        if (onBatch && (i % 5 === 0 || i === noteIds.length - 1)) {
           await onBatch(i + 1, noteIds.length, canonicalRelationships.size);
         }
       }

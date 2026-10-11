@@ -8,7 +8,8 @@
     "build": "node esbuild.config.mjs production",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "install:vault": "node -e \"const fs=require('fs'),path=require('path');const dest='/media/vedha/E2/digital brain/vedha-digital-brain/.obsidian/plugins/obsidian-semantic-autolinker';fs.mkdirSync(dest,{recursive:true});['main.js','manifest.json','styles.css'].forEach(f=>fs.copyFileSync(f,path.join(dest,f)));console.log('Deployed successfully');\""
   },
   "keywords": [
     "obsidian",
