@@ -36,8 +36,14 @@ export class Tokenizer {
       const original = match[0];
       const normalized = TextNormalizer.normalizeTerm(original);
 
-      // Skip lone punctuation or numbers-only single digits if desired, but keep meaningful identifiers
-      if (normalized.length === 0) continue;
+      // Skip lone punctuation, symbol sequences or non-alphabetic tokens
+      if (
+        normalized.length === 0 ||
+        TextNormalizer.isSymbolSequence(normalized) ||
+        !TextNormalizer.hasAlphabeticContent(normalized)
+      ) {
+        continue;
+      }
 
       tokens.push({
         term: normalized,
@@ -64,6 +70,9 @@ export class Tokenizer {
     const terms: string[] = [];
 
     const addTerm = (term: string) => {
+      if (TextNormalizer.isSymbolSequence(term) || !TextNormalizer.hasAlphabeticContent(term)) {
+        return;
+      }
       terms.push(term);
       termFrequencies.set(term, (termFrequencies.get(term) || 0) + 1);
     };

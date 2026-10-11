@@ -38,6 +38,9 @@ export class KeywordExtractor {
     const candidates: ExtractedKeyword[] = [];
 
     for (const [term, rawWeight] of vector.entries()) {
+      if (TextNormalizer.isSymbolSequence(term) || !TextNormalizer.hasAlphabeticContent(term)) {
+        continue;
+      }
       let weight = rawWeight;
       const isHeading = headingTerms.has(term);
       const isAlias = aliasTerms.has(term);

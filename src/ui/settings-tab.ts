@@ -171,6 +171,18 @@ export class SemanticAutolinkerSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Link Only by Title & Heading")
+      .setDesc("When enabled, links are generated strictly from note titles, aliases, and section headings across the whole vault, skipping inferred keywords")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autolink.linkOnlyTitleHeading ?? false)
+          .onChange(async (val) => {
+            this.plugin.settings.autolink.linkOnlyTitleHeading = val;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Minimum Keyword Length")
       .setDesc("Minimum length of words to consider as distinctive keywords")
       .addSlider((slider) =>

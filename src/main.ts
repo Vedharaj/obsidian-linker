@@ -131,6 +131,39 @@ export default class SemanticAutolinkerPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "auto-link-vault-titles-headings-only",
+      name: "Auto-Link Vault by Titles & Headings Only (Instant with Undo)",
+      callback: async () => {
+        const prev = this.settings.autolink.linkOnlyTitleHeading;
+        this.settings.autolink.linkOnlyTitleHeading = true;
+        try {
+          await this.autoLinkVault(true);
+        } finally {
+          this.settings.autolink.linkOnlyTitleHeading = prev;
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "auto-link-active-titles-headings-only",
+      name: "Auto-Link Current Note by Titles & Headings Only (Instant)",
+      checkCallback: (checking: boolean) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && activeFile.extension === "md") {
+          if (!checking) {
+            const prev = this.settings.autolink.linkOnlyTitleHeading;
+            this.settings.autolink.linkOnlyTitleHeading = true;
+            this.autoLinkActiveNote(true).finally(() => {
+              this.settings.autolink.linkOnlyTitleHeading = prev;
+            });
+          }
+          return true;
+        }
+        return false;
+      },
+    });
+
+    this.addCommand({
       id: "rollback-last-autolink",
       name: "Rollback Last Auto-Link (Undo)",
       callback: async () => {
@@ -226,15 +259,17 @@ export default class SemanticAutolinkerPlugin extends Plugin {
   public refreshTitleIndex(): void {
     if (!this.reviewManager) return;
     const titleIndex = this.reviewManager.getTitleIndex();
+    const linkOnlyTitleHeading = this.settings.autolink.linkOnlyTitleHeading === true;
 
     if (this.indexManager && this.indexManager.notes.size > 0) {
       titleIndex.buildIndex(
         this.indexManager.notes,
         this.settings.autolink.matchAliases,
-        this.settings.autolink.linkHeadings ?? true
+        this.settings.autolink.linkHeadings ?? true,
+        linkOnlyTitleHeading
       );
 
-      if (this.settings.autolink.linkKeywords ?? true) {
+      if (!linkOnlyTitleHeading && (this.settings.autolink.linkKeywords ?? true)) {
         const minLen = this.settings.autolink.minKeywordLength ?? 3;
         for (const [path, note] of this.indexManager.notes.entries()) {
           const freqs = this.indexManager.termFrequencies.get(path);
@@ -244,7 +279,7 @@ export default class SemanticAutolinkerPlugin extends Plugin {
               .sort((a, b) => b[1] - a[1])
               .slice(0, 5)
               .map(([t]) => t);
-            titleIndex.addKeywordsForNote(path, topTerms);
+            titleIndex.addKeywordsForNote(path, topTerms, linkOnlyTitleHeading);
           }
         }
       }
@@ -273,6 +308,7 @@ export default class SemanticAutolinkerPlugin extends Plugin {
         {
           matchAliases: this.settings.autolink.matchAliases,
           matchHeadings: this.settings.autolink.linkHeadings ?? true,
+          linkOnlyTitleHeading,
         }
       );
     }

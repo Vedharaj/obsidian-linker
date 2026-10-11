@@ -3,6 +3,7 @@ import { TitleIndex } from "./title-index";
 import { AliasResolver } from "./alias-resolver";
 import { MarkdownParser } from "../markdown/markdown-parser";
 import { computeContentHash } from "../indexing/content-hash";
+import { TextNormalizer } from "../markdown/text-normalizer";
 
 export class LinkProposer {
   private titleIndex: TitleIndex;
@@ -43,6 +44,16 @@ export class LinkProposer {
     for (const { phrase, type } of sortedPhrases) {
       if (proposalCount >= this.settings.maxLinksPerNote) break;
 
+      // RULE: If linkOnlyTitleHeading is set, skip inferred keywords completely
+      if (this.settings.linkOnlyTitleHeading && type === "keyword") {
+        continue;
+      }
+
+      // RULE: Skip any sequence of symbols
+      if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) {
+        continue;
+      }
+
       const targetInfo = this.titleIndex.resolveTarget(phrase);
       if (!targetInfo) continue;
 
@@ -69,6 +80,12 @@ export class LinkProposer {
 
         // Group 1 contains the matched text
         const matchedText = match[1] || match[0];
+
+        // Skip any sequence of symbols
+        if (TextNormalizer.isSymbolSequence(matchedText) || !TextNormalizer.hasAlphabeticContent(matchedText)) {
+          continue;
+        }
+
         const startOffset = match.index + (match[0].indexOf(matchedText));
         const endOffset = startOffset + matchedText.length;
 

@@ -25,7 +25,8 @@ export class TitleIndex {
   public buildIndex(
     notes: Map<string, NoteRecord>,
     matchAliases = true,
-    matchHeadings = true
+    matchHeadings = true,
+    linkOnlyTitleHeading = false
   ): void {
     this.titleMap.clear();
     this.aliasMap.clear();
@@ -34,40 +35,25 @@ export class TitleIndex {
     this.sortedPhrases = [];
 
     for (const note of notes.values()) {
-      // Index title
-      const normTitle = TextNormalizer.normalizeTerm(note.title);
-      if (normTitle.length >= 2) {
-        const paths = this.titleMap.get(normTitle) || [];
-        if (!paths.includes(note.path)) paths.push(note.path);
-        this.titleMap.set(normTitle, paths);
-      }
+      // 1. Title
+      this.indexTitleWithVariants(note.title, note.path);
 
-      // Index aliases
+      // 2. Aliases
       if (matchAliases && note.aliases) {
         for (const alias of note.aliases) {
-          const normAlias = TextNormalizer.normalizeTerm(alias);
-          if (normAlias.length >= 2) {
-            const paths = this.aliasMap.get(normAlias) || [];
-            if (!paths.includes(note.path)) paths.push(note.path);
-            this.aliasMap.set(normAlias, paths);
-          }
+          this.indexAliasWithVariants(alias, note.path);
         }
       }
 
-      // Index headings
+      // 3. Headings
       if (matchHeadings && note.headings) {
         for (const heading of note.headings) {
-          const normHeading = TextNormalizer.normalizeTerm(heading);
-          if (normHeading.length >= 3 && !this.titleMap.has(normHeading)) {
-            const list = this.headingMap.get(normHeading) || [];
-            list.push({ path: note.path, heading });
-            this.headingMap.set(normHeading, list);
-          }
+          this.indexHeadingWithVariants(heading, note.path);
         }
       }
     }
 
-    this.rebuildSortedPhrases();
+    this.rebuildSortedPhrases(linkOnlyTitleHeading);
   }
 
   /**
@@ -77,7 +63,7 @@ export class TitleIndex {
   public buildFromVaultFiles(
     files: Array<{ path: string; basename: string }>,
     getMetadata?: (path: string) => { aliases?: string[]; headings?: string[] } | undefined,
-    options: { matchAliases?: boolean; matchHeadings?: boolean } = {}
+    options: { matchAliases?: boolean; matchHeadings?: boolean; linkOnlyTitleHeading?: boolean } = {}
   ): void {
     this.titleMap.clear();
     this.aliasMap.clear();
@@ -87,15 +73,11 @@ export class TitleIndex {
 
     const matchAliases = options.matchAliases !== false;
     const matchHeadings = options.matchHeadings !== false;
+    const linkOnlyTitleHeading = options.linkOnlyTitleHeading === true;
 
     for (const file of files) {
       // 1. Title
-      const normTitle = TextNormalizer.normalizeTerm(file.basename);
-      if (normTitle.length >= 2) {
-        const paths = this.titleMap.get(normTitle) || [];
-        if (!paths.includes(file.path)) paths.push(file.path);
-        this.titleMap.set(normTitle, paths);
-      }
+      this.indexTitleWithVariants(file.basename, file.path);
 
       // 2. Metadata (aliases & headings)
       if (getMetadata) {
@@ -103,48 +85,146 @@ export class TitleIndex {
         if (meta) {
           if (matchAliases && meta.aliases) {
             for (const alias of meta.aliases) {
-              const normAlias = TextNormalizer.normalizeTerm(alias);
-              if (normAlias.length >= 2) {
-                const paths = this.aliasMap.get(normAlias) || [];
-                if (!paths.includes(file.path)) paths.push(file.path);
-                this.aliasMap.set(normAlias, paths);
-              }
+              this.indexAliasWithVariants(alias, file.path);
             }
           }
 
           if (matchHeadings && meta.headings) {
             for (const heading of meta.headings) {
-              const normH = TextNormalizer.normalizeTerm(heading);
-              if (normH.length >= 3 && !this.titleMap.has(normH)) {
-                const list = this.headingMap.get(normH) || [];
-                list.push({ path: file.path, heading });
-                this.headingMap.set(normH, list);
-              }
+              this.indexHeadingWithVariants(heading, file.path);
             }
           }
         }
       }
     }
 
-    this.rebuildSortedPhrases();
+    this.rebuildSortedPhrases(linkOnlyTitleHeading);
   }
 
   /**
-   * Adds extracted keywords for a note.
+   * Adds extracted keywords for a note, stripping symbol sequences, dates, and numbers.
    */
-  public addKeywordsForNote(path: string, keywords: string[]): void {
+  public addKeywordsForNote(path: string, keywords: string[], linkOnlyTitleHeading = false): void {
+    if (linkOnlyTitleHeading) return;
+
     for (const kw of keywords) {
-      const norm = TextNormalizer.normalizeTerm(kw);
-      if (norm.length >= 3 && !this.titleMap.has(norm) && !this.aliasMap.has(norm)) {
-        const paths = this.keywordMap.get(norm) || [];
-        if (!paths.includes(path)) paths.push(path);
-        this.keywordMap.set(norm, paths);
+      if (TextNormalizer.isSymbolSequence(kw) || !TextNormalizer.hasAlphabeticContent(kw)) {
+        continue;
+      }
+
+      // Check if keyword has dates or numbering: e.g. "5.[keyword]", "[keyword 1]", "meeting 2026-10-11"
+      const dateExt = TextNormalizer.extractDateAndKeyword(kw);
+      const cleanKw = TextNormalizer.stripNumbering(dateExt.cleanKeyword || kw);
+
+      this.addKeywordPhrase(kw, path);
+      if (cleanKw && cleanKw.length >= 2 && cleanKw.toLowerCase() !== kw.toLowerCase()) {
+        this.addKeywordPhrase(cleanKw, path);
       }
     }
-    this.rebuildSortedPhrases();
+
+    this.rebuildSortedPhrases(linkOnlyTitleHeading);
   }
 
-  public rebuildSortedPhrases(): void {
+  private indexTitleWithVariants(rawTitle: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(rawTitle) || !TextNormalizer.hasAlphabeticContent(rawTitle)) {
+      return;
+    }
+
+    // 1. Exact title
+    this.addTitlePhrase(rawTitle, path);
+
+    // 2. Separate date and keyword: e.g. "Meeting 2026-10-11", "[keyword] [date]"
+    const dateExt = TextNormalizer.extractDateAndKeyword(rawTitle);
+    if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
+      this.addTitlePhrase(dateExt.cleanKeyword, path);
+    }
+
+    // 3. Skip numbering prefix/suffix: e.g. "5.[keyword]", "[keyword 1]", "[keyword-1]", "5. Python"
+    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawTitle);
+    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawTitle.toLowerCase()) {
+      this.addTitlePhrase(cleanNum, path);
+    }
+  }
+
+  private indexAliasWithVariants(rawAlias: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(rawAlias) || !TextNormalizer.hasAlphabeticContent(rawAlias)) {
+      return;
+    }
+
+    this.addAliasPhrase(rawAlias, path);
+
+    const dateExt = TextNormalizer.extractDateAndKeyword(rawAlias);
+    if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
+      this.addAliasPhrase(dateExt.cleanKeyword, path);
+    }
+
+    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawAlias);
+    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawAlias.toLowerCase()) {
+      this.addAliasPhrase(cleanNum, path);
+    }
+  }
+
+  private indexHeadingWithVariants(rawHeading: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(rawHeading) || !TextNormalizer.hasAlphabeticContent(rawHeading)) {
+      return;
+    }
+
+    this.addHeadingPhrase(rawHeading, path, rawHeading);
+
+    const dateExt = TextNormalizer.extractDateAndKeyword(rawHeading);
+    if (dateExt.date && dateExt.cleanKeyword.length >= 2) {
+      this.addHeadingPhrase(dateExt.cleanKeyword, path, rawHeading);
+    }
+
+    const cleanNum = TextNormalizer.stripNumbering(dateExt.cleanKeyword || rawHeading);
+    if (cleanNum && cleanNum.length >= 2 && cleanNum.toLowerCase() !== rawHeading.toLowerCase()) {
+      this.addHeadingPhrase(cleanNum, path, rawHeading);
+    }
+  }
+
+  private addTitlePhrase(phrase: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    const norm = TextNormalizer.normalizeTerm(phrase);
+    if (norm.length < 2) return;
+    const paths = this.titleMap.get(norm) || [];
+    if (!paths.includes(path)) paths.push(path);
+    this.titleMap.set(norm, paths);
+  }
+
+  private addAliasPhrase(phrase: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    const norm = TextNormalizer.normalizeTerm(phrase);
+    if (norm.length < 2) return;
+    const paths = this.aliasMap.get(norm) || [];
+    if (!paths.includes(path)) paths.push(path);
+    this.aliasMap.set(norm, paths);
+  }
+
+  private addHeadingPhrase(phrase: string, path: string, originalHeading: string): void {
+    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    const norm = TextNormalizer.normalizeTerm(phrase);
+    if (norm.length < 2) return;
+    if (this.titleMap.has(norm)) return; // Title takes precedence
+
+    const list = this.headingMap.get(norm) || [];
+    if (!list.some(h => h.path === path && h.heading === originalHeading)) {
+      list.push({ path, heading: originalHeading });
+    }
+    this.headingMap.set(norm, list);
+  }
+
+  private addKeywordPhrase(phrase: string, path: string): void {
+    if (TextNormalizer.isSymbolSequence(phrase) || !TextNormalizer.hasAlphabeticContent(phrase)) return;
+    const norm = TextNormalizer.normalizeTerm(phrase);
+    if (norm.length < 2) return;
+    if (this.titleMap.has(norm) || this.aliasMap.has(norm)) return;
+
+    const paths = this.keywordMap.get(norm) || [];
+    if (!paths.includes(path)) paths.push(path);
+    this.keywordMap.set(norm, paths);
+  }
+
+  public rebuildSortedPhrases(linkOnlyTitleHeading = false): void {
     this.sortedPhrases = [];
     const phraseMap = new Map<string, MatchType>();
 
@@ -167,10 +247,12 @@ export class TitleIndex {
       }
     }
 
-    // 4. Keywords
-    for (const phrase of this.keywordMap.keys()) {
-      if (!phraseMap.has(phrase)) {
-        phraseMap.set(phrase, "keyword");
+    // 4. Keywords (only if not linkOnlyTitleHeading)
+    if (!linkOnlyTitleHeading) {
+      for (const phrase of this.keywordMap.keys()) {
+        if (!phraseMap.has(phrase)) {
+          phraseMap.set(phrase, "keyword");
+        }
       }
     }
 

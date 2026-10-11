@@ -99,6 +99,22 @@ export class DashboardView extends ItemView {
       await this.render();
     });
 
+    const linkTitleHeadingActiveBtn = quickBar.createEl("button", {
+      cls: "semantic-button-secondary",
+      text: "🏷️ Link by Titles & Headings Only",
+    });
+    linkTitleHeadingActiveBtn.addEventListener("click", async () => {
+      this.logActivity("Auto-linking current note by titles & headings only...");
+      const prev = this.plugin.settings.autolink.linkOnlyTitleHeading;
+      this.plugin.settings.autolink.linkOnlyTitleHeading = true;
+      try {
+        await this.plugin.autoLinkActiveNote(true);
+      } finally {
+        this.plugin.settings.autolink.linkOnlyTitleHeading = prev;
+      }
+      await this.render();
+    });
+
     const undoBtn = quickBar.createEl("button", {
       cls: "semantic-button-danger",
       text: "↩ Rollback Last Auto-Link",
@@ -192,6 +208,22 @@ export class DashboardView extends ItemView {
     autoLinkVaultBtn.addEventListener("click", async () => {
       this.logActivity("Triggered vault-wide auto-linking");
       await this.plugin.autoLinkVault(true);
+      await this.render();
+    });
+
+    const autoLinkVaultTitleHeadingBtn = secondaryBar.createEl("button", {
+      cls: "semantic-button-secondary",
+      text: "🏷️ Auto-Link Vault (Titles/Headings Only)",
+    });
+    autoLinkVaultTitleHeadingBtn.addEventListener("click", async () => {
+      this.logActivity("Triggered vault-wide auto-linking by titles & headings only");
+      const prev = this.plugin.settings.autolink.linkOnlyTitleHeading;
+      this.plugin.settings.autolink.linkOnlyTitleHeading = true;
+      try {
+        await this.plugin.autoLinkVault(true);
+      } finally {
+        this.plugin.settings.autolink.linkOnlyTitleHeading = prev;
+      }
       await this.render();
     });
 

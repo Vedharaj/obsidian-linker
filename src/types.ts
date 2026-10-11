@@ -149,6 +149,7 @@ export interface ProgressSettings {
 export interface AutolinkSettings {
   autoWriteEnabled: boolean;
   directAutoApply?: boolean;
+  linkOnlyTitleHeading?: boolean;
   maxLinksPerNote: number;
   requireWordBoundary: boolean;
   caseSensitive: boolean;
