@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-semantic-autolinker",
+  "name": "Semantic Auto-Linker & Knowledge Graph",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Local-first semantic relationship discovery, interactive knowledge graph, and safe auto-linking without external AI or cloud APIs.",
+  "author": "Vedha",
+  "isDesktopOnly": false
+}

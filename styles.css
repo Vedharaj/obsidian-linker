@@ -1,0 +1,282 @@
+/* Semantic Auto-Linker Plugin Styles */
+
+/* Common & Layout */
+.semantic-autolinker-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  gap: 16px;
+  color: var(--text-normal);
+}
+
+.semantic-autolinker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 12px;
+}
+
+.semantic-autolinker-header h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.semantic-autolinker-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-suggested, .badge-pending {
+  background-color: var(--color-orange);
+  color: var(--text-on-accent);
+}
+
+.badge-approved {
+  background-color: var(--color-green);
+  color: var(--text-on-accent);
+}
+
+.badge-rejected {
+  background-color: var(--color-red);
+  color: var(--text-on-accent);
+}
+
+.badge-applied, .badge-existing {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.badge-stale {
+  background-color: var(--text-muted);
+  color: var(--text-on-accent);
+}
+
+/* Dashboard Metrics Grid */
+.semantic-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.semantic-metric-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.semantic-metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-accent);
+  margin-bottom: 4px;
+}
+
+.semantic-metric-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Progress Section */
+.semantic-progress-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.semantic-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.semantic-progress-bar-bg {
+  width: 100%;
+  height: 10px;
+  background-color: var(--background-modifier-border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.semantic-progress-bar-fill {
+  height: 100%;
+  background-color: var(--interactive-accent);
+  transition: width 0.3s ease;
+}
+
+.semantic-progress-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Button & Action Bars */
+.semantic-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.semantic-button-primary {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.semantic-button-secondary {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.semantic-button-danger {
+  background-color: var(--color-red);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+/* Activity Log */
+.semantic-activity-list {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--font-monospace);
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+}
+
+.semantic-activity-item {
+  display: flex;
+  gap: 10px;
+}
+
+.semantic-activity-time {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Graph View */
+.semantic-graph-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.semantic-graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  z-index: 10;
+}
+
+.semantic-graph-canvas {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background-color: var(--background-primary);
+}
+
+.semantic-graph-sidebar {
+  position: absolute;
+  top: 55px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100% - 70px);
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  padding: 16px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+/* Review View */
+.semantic-review-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+
+.semantic-review-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.semantic-review-table th, .semantic-review-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 0.9rem;
+}
+
+.semantic-review-table th {
+  background-color: var(--background-secondary);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.semantic-diff-preview {
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 6px;
+  font-family: var(--font-monospace);
+  font-size: 0.85rem;
+}
+
+.semantic-diff-del {
+  background-color: rgba(255, 0, 0, 0.15);
+  color: var(--color-red);
+  text-decoration: line-through;
+}
+
+.semantic-diff-ins {
+  background-color: rgba(0, 255, 0, 0.15);
+  color: var(--color-green);
+}
